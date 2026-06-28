@@ -1,0 +1,61 @@
+#SPDX-License-Identifier: MIT-0
+---
+# tasks file for dnsdist
+- name: Install dnsdist and deps
+  package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - dnsdist
+    - python3-lmdb
+    - liblmdb-dev
+    - liblmdb0
+  become: true
+
+- name: Template scripts
+  template:
+    src: "{{ item }}.j2"
+    dest: "/etc/dnsdist/{{ item }}"
+    owner: root
+    group: root
+    mode: 0750
+  loop:
+    - "blocklist_fetch.sh"
+    - "blocklist_update.sh"
+    - "mmap_create.py"
+    - "mmap_update.py"
+  become: true
+
+- name: Check if blocklist lmdb already exists
+  stat:
+    path: "/etc/dnsdist/blocklist.lmdb"
+  register: blocklist_lmdb
+
+- name: Run blocklist creation
+  command: "/etc/dnsdist/{{ item }}"
+  loop:
+    - "blocklist_fetch.sh"
+    - "mmap_create.py"
+  become: true
+  when: blocklist_lmdb.stat.isdir is not defined
+
+- name: Template dnsdist config, defaulting to the role's template last
+  template:
+    src: "{{ lookup('first_found', params) }}"
+    dest: "/etc/dnsdist/dnsdist.conf"
+    owner: root
+    group: _dnsdist
+    mode: 0640
+  vars:
+    params:
+      files:
+        - dnsdist.conf.j2
+      paths:
+        - "{{ playbook_dir }}/templates"
+  become: true
+  notify:
+    - check dnsdist config
+    - restart dnsdist
+
+
+

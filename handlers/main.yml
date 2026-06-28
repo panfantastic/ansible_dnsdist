@@ -1,0 +1,12 @@
+#SPDX-License-Identifier: MIT-0
+---
+# handlers file for dnsdist
+- name: check dnsdist config
+  command: "dnsdist --check-config -C /etc/dnsdist/dnsdist.conf"
+  become: true
+
+- name: restart dnsdist
+  service:
+    name: dnsdist
+    state: restarted
+  become: true

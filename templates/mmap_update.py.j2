@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+import lmdb, os
+
+LMDB_PATH = "/etc/dnsdist/blocklist.lmdb"
+NEW = "/etc/dnsdist/blocklist.txt"
+PREV = "/etc/dnsdist/blocklist.prev"
+MAP_SIZE = 512 * 1024 * 1024  # 1GB ceiling, must match/exceed reader
+
+def load(path):
+    s = set()
+    if not os.path.exists(path):
+        return s
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                s.add(".".join(reversed(line.rstrip(".").split("."))))
+    return s
+
+new = load(NEW)
+prev = load(PREV)
+
+added = new - prev
+removed = prev - new
+
+if not added and not removed:
+    print("No changes")
+else:
+    env = lmdb.open(LMDB_PATH, map_size=MAP_SIZE, subdir=True)
+    with env.begin(write=True) as txn:
+        for k in added:
+            txn.put(k.encode(), b"1")
+        for k in removed:
+            txn.delete(k.encode())
+    env.close()
+    print(f"+{len(added)} -{len(removed)}")
+
+os.replace(NEW, PREV)
+

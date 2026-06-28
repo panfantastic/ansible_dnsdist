@@ -1,0 +1,109 @@
+-- disable security status polling via DNS
+setSecurityPollSuffix("")
+
+controlSocket('127.0.0.1:5199')
+setConsoleACL({"127.0.0.1"})
+setKey("{{ dnsdist_console_key | default(lookup( 'community.general.random_string', length=32, base64=True)) }}")
+
+-------------------
+-- DNS Filtering --
+-------------------
+local ffi = require("ffi")
+
+ffi.cdef[[
+  typedef unsigned int MDB_dbi;
+  typedef struct MDB_env MDB_env;
+  typedef struct MDB_txn MDB_txn;
+  typedef struct { size_t mv_size; void* mv_data; } MDB_val;
+
+  int mdb_env_create(MDB_env**);
+  int mdb_env_set_maxreaders(MDB_env*, unsigned int);
+  int mdb_env_open(MDB_env*, const char*, unsigned int, unsigned int);
+  int mdb_txn_begin(MDB_env*, MDB_txn*, unsigned int, MDB_txn**);
+  int mdb_dbi_open(MDB_txn*, const char*, unsigned int, MDB_dbi*);
+  int mdb_get(MDB_txn*, MDB_dbi, MDB_val*, MDB_val*);
+  int mdb_txn_commit(MDB_txn*);
+  void mdb_txn_abort(MDB_txn*);
+  const char* mdb_strerror(int);
+]]
+
+local lmdb = ffi.load("lmdb")
+local MDB_RDONLY = 0x20000
+
+-- open env + dbi ONCE, single-threaded, cache both
+local env, dbi
+do
+  local e = ffi.new("MDB_env*[1]")
+  local rc = lmdb.mdb_env_create(e)
+  assert(rc == 0, "env_create: " .. ffi.string(lmdb.mdb_strerror(rc)))
+  lmdb.mdb_env_set_maxreaders(e[0], 256)  -- headroom for worker threads
+  rc = lmdb.mdb_env_open(e[0], "/etc/dnsdist/blocklist.lmdb", MDB_RDONLY, tonumber("0644", 8))
+  assert(rc == 0, "env_open: " .. ffi.string(lmdb.mdb_strerror(rc)))
+  env = e[0]
+
+  local txn = ffi.new("MDB_txn*[1]")
+  rc = lmdb.mdb_txn_begin(env, nil, MDB_RDONLY, txn)
+  assert(rc == 0, "txn_begin init: " .. ffi.string(lmdb.mdb_strerror(rc)))
+  local d = ffi.new("MDB_dbi[1]")
+  rc = lmdb.mdb_dbi_open(txn[0], nil, 0, d)
+  assert(rc == 0, "dbi_open: " .. ffi.string(lmdb.mdb_strerror(rc)))
+  dbi = d[0]
+  lmdb.mdb_txn_commit(txn[0])  -- commit so dbi persists in the env
+end
+
+local function lookup(s)
+  local txn = ffi.new("MDB_txn*[1]")
+  if lmdb.mdb_txn_begin(env, nil, MDB_RDONLY, txn) ~= 0 then return false end
+
+  local buf = ffi.new("uint8_t[?]", #s)
+  ffi.copy(buf, s, #s)
+
+  local key = ffi.new("MDB_val")
+  key.mv_size = #s
+  key.mv_data = buf
+  local val = ffi.new("MDB_val")
+
+  local rc = lmdb.mdb_get(txn[0], dbi, key, val)
+  lmdb.mdb_txn_abort(txn[0])
+  return rc == 0
+end
+
+local function isBlocked(qname)
+  local name = qname:lower():gsub("%.$", "")
+  local parts = {}
+  for label in name:gmatch("[^.]+") do
+    table.insert(parts, 1, label)  -- reversed
+  end
+  local reversed = table.concat(parts, ".")
+  if lookup(reversed) then return true end
+  for i = 2, #parts do
+    if lookup(table.concat(parts, ".", 1, i)) then return true end
+  end
+  return false
+end
+
+newServer({address="8.8.8.8:53", order=1})
+newServer({address="8.8.4.4:53", order=1})
+newServer({address="1.1.1.2:53", order=1})
+
+pc = newPacketCache(10000, {
+        maxTTL = 86400,
+        minTTL = 0,
+        temporaryFailureTTL = 60,
+        staleTTL = 60,
+        keepStaleData = true,
+})
+setStaleCacheEntriesTTL(3600)
+
+getPool(""):setCache(pc)
+
+-- Block domains on blocklist
+addAction(AllRule(), LuaAction(function(dq)
+  if isBlocked(dq.qname:toString()) then
+    return DNSAction.Nxdomain, ""
+  end
+  return DNSAction.None, ""
+end))
+
+addAction(AllRule(), PoolAction(""))
+
