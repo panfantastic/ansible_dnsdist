@@ -18,7 +18,7 @@
     dest: "/etc/dnsdist/{{ item }}"
     owner: root
     group: root
-    mode: 0750
+    mode: "0750"
   loop:
     - "blocklist_fetch.sh"
     - "blocklist_update.sh"
@@ -45,7 +45,7 @@
     dest: "/etc/dnsdist/dnsdist.conf"
     owner: root
     group: _dnsdist
-    mode: 0640
+    mode: "0640"
   vars:
     params:
       files:

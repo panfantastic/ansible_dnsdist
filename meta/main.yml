@@ -1,4 +1,4 @@
-#SPDX-License-Identifier: MIT-0
+#SPDX-License-Identifier: BSD-3-Clouse
 galaxy_info:
   author: Iain Grant
   description: DNSDist + domain filtering
