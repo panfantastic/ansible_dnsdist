@@ -52,6 +52,7 @@
         - dnsdist.conf.j2
       paths:
         - "{{ playbook_dir }}/templates"
+        - "{{ role_path }}/templates"
   become: true
   notify:
     - check dnsdist config
