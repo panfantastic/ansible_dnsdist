@@ -69,7 +69,7 @@ Customising the config
 ----------------------
 
 To add your own dnsdist logic, drop a `dnsdist.conf.j2` into
-`{{ playbook_dir }}/templates/` based on the role's own template. The role uses
+`{{ playbook_dir }}/templates/{{ ansible_facts['hostname'] }}` based on the role's own template. The role uses
 `first_found` and will prefer your playbook-level template over the bundled one,
 so you can override the whole config without forking the role.
 
@@ -79,7 +79,7 @@ Monitoring
 The bundled config can expose query and response telemetry over a dnstap interface.
 Ensure that dnsdist_dnstap_enabled is true to enable.
 
-A typical setup pairs this with dnscollector (https://github.com/dmachard/DNS-collector or my equivalent role to set that up) to gather stats and forward them on
+A typical setup pairs this with dnscollector (https://github.com/dmachard/DNS-collector) to gather stats and forward them on
 (for example to a Mimir cluster).  If you
 label metrics by query name, watch series cardinality, though for a single
 resolver it is unlikely to trouble a modestly-sized backend.

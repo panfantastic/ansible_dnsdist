@@ -19,11 +19,30 @@
     owner: root
     group: root
     mode: "0750"
+    lstrip_blocks: yes
   loop:
     - "blocklist_fetch.sh"
     - "blocklist_update.sh"
     - "mmap_create.py"
     - "mmap_update.py"
+  become: true
+
+- name: Upload custom blocklist
+  template:
+    src: "{{ lookup('first_found', dnsdist_custom_txt) }}"
+    dest: /etc/dnsdist/lists/custom.txt
+    owner: root
+    group: root
+    mode: "0644"
+    lstrip_blocks: yes
+  vars:
+    dnsdist_custom_txt:
+      files:
+        - "custom.txt.j2"
+      paths:
+        - "{{ playbook_dir }}/templates/{{ ansible_facts['hostname'] }}"
+        - "{{ playbook_dir }}/templates"
+        - "{{ role_path }}/templates"
   become: true
 
 - name: Check if blocklist lmdb already exists
@@ -46,11 +65,13 @@
     owner: root
     group: _dnsdist
     mode: "0640"
+    lstrip_blocks: yes
   vars:
     params:
       files:
         - dnsdist.conf.j2
       paths:
+        - "{{ playbook_dir }}/templates/{{ ansible_facts['hostname'] }}"
         - "{{ playbook_dir }}/templates"
         - "{{ role_path }}/templates"
   become: true

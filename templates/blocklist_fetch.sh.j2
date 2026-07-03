@@ -1,16 +1,19 @@
 #!/bin/bash
 
-
-{% for i in blocklist_urls.files %}
-wget -4 -O "lists/{{ i }}" "{{ blocklist_urls.domain }}/{{ i }}"
+{# set blocklist_urls = blocklist_urls_default | combine(blocklist_urls_custom, recursive=true) #}
+{# for i in blocklist_urls.files #}
+{% for i in blocklist_urls %}
+  {% for j in i.files %}
+wget -4 -O "{{ dnsdist_etc_dir }}/lists/{{ j }}" "{{ i.domain }}/{{ j }}"
+  {% endfor %}
 {% endfor %}
 
-rm lists/custom.txt
+rm "{{ dnsdist_etc_dir }}/lists/custom.txt"
 {% for i in blocklist_domains %}
-echo {{ i }} >> lists/custom.txt
+echo {{ i }} >> "{{ dnsdist_etc_dir }}/lists/custom.txt"
 {% endfor %}
 
-cat lists/*.txt |sort -n |uniq > blocklist.txt
+cat {{ dnsdist_etc_dir }}/lists/*.txt |sort -n |uniq > "{{ dnsdist_etc_dir }}/blocklist.txt"
 
-chmod 644 blocklist.txt
+chmod 644 "{{ dnsdist_etc_dir }}/blocklist.txt"
 

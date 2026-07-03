@@ -4,26 +4,32 @@
 dnsdist_dnstap_enabled: false
 dnsdist_dnstap_collector: "127.0.0.1:6000"
 
-blocklist_urls: "{{ blocklist_urls_default | combine(blocklist_urls_custom) }}"
-blocklist_urls_custom: {}
-blocklist_urls_default:
-  domain: "https://raw.githubusercontent.com/blocklistproject/Lists/refs/heads/master/alt-version"
-  files:
-    - "abuse-nl.txt"
-    - "ads-nl.txt"
-    - "crypto-nl.txt"
-    - "drugs-nl.txt"
-    - "fraud-nl.txt"
-    - "gambling-nl.txt"
-    - "malware-nl.txt"
-    - "phishing-nl.txt"
-    - "piracy-nl.txt"
-    - "ransomware-nl.txt"
-    - "redirect-nl.txt"
-    - "scam-nl.txt"
-    - "tracking-nl.txt"
+dnsdist_etc_dir: "/etc/dnsdist"
 
-blocklist_domains: "{{ blocklist_domains_default | combine(blocklist_domains_custom) }}"
+  #blocklist_urls: "{{ blocklist_urls_default | combine(blocklist_urls_custom) }}"
+blocklist_urls: "{{ blocklist_urls_default + blocklist_urls_custom }}"
+blocklist_urls_custom: []
+blocklist_urls_default:
+  - name: blocklistproject
+    domain: "https://raw.githubusercontent.com/blocklistproject/Lists/refs/heads/master/alt-version"
+    files: "{{ blocklistproject_files }}"
+
+blocklistproject_files:
+  - "abuse-nl.txt"
+  - "ads-nl.txt"
+  - "crypto-nl.txt"
+  - "drugs-nl.txt"
+  - "fraud-nl.txt"
+  - "gambling-nl.txt"
+  - "malware-nl.txt"
+  - "phishing-nl.txt"
+  - "piracy-nl.txt"
+  - "ransomware-nl.txt"
+  - "redirect-nl.txt"
+  - "scam-nl.txt"
+  - "tracking-nl.txt"
+
+blocklist_domains: "{{ blocklist_domains_default + blocklist_domains_custom }}"
 blocklist_domains_custom: []
 blocklist_domains_default:
   - pastebin.com

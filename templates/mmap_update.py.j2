@@ -1,15 +1,30 @@
 #!/usr/bin/env python3
-import lmdb, os
+import lmdb, os, sys
 
-LMDB_PATH = "/etc/dnsdist/blocklist.lmdb"
-NEW = "/etc/dnsdist/blocklist.txt"
-PREV = "/etc/dnsdist/blocklist.prev"
-MAP_SIZE = 512 * 1024 * 1024  # 1GB ceiling, must match/exceed reader
+# Paths are templated so the fetch script, this updater, and dnsdist.conf
+# all derive from the same role vars and cannot drift apart.
+LMDB_PATH = "{{ dnsdist_blocklist_lmdb_path | default('/etc/dnsdist/blocklist.lmdb') }}"
+NEW       = "{{ dnsdist_blocklist_new_path  | default('/etc/dnsdist/blocklist.txt') }}"
+PREV      = "{{ dnsdist_blocklist_prev_path | default('/etc/dnsdist/blocklist.prev') }}"
+MAP_SIZE  = 512 * 1024 * 1024  # 512MB ceiling; must match or exceed the dnsdist reader
 
-def load(path):
-    s = set()
+# Sanity thresholds. A real blocklist never legitimately shrinks to near-zero
+# or deletes most of itself in one run, so refuse if it tries.
+MIN_ENTRIES      = {{ dnsdist_blocklist_min_entries | default(1000) }}
+MAX_DELETE_RATIO = {{ dnsdist_blocklist_max_delete_ratio | default(0.5) }}
+
+
+def die(msg):
+    sys.stderr.write("BLOCKLIST UPDATE REFUSED: " + msg + "\n")
+    sys.exit(1)
+
+
+def load(path, required=False):
     if not os.path.exists(path):
-        return s
+        if required:
+            die(path + " does not exist - fetch did not produce a list")
+        return set()
+    s = set()
     with open(path) as f:
         for line in f:
             line = line.strip()
@@ -17,11 +32,25 @@ def load(path):
                 s.add(".".join(reversed(line.rstrip(".").split("."))))
     return s
 
-new = load(NEW)
+
+new = load(NEW, required=True)
 prev = load(PREV)
+
+# --- gates: all checks happen BEFORE the write transaction opens ---
+
+if len(new) < MIN_ENTRIES:
+    die("new list has {} entries, below floor of {} - "
+        "source likely failed or truncated".format(len(new), MIN_ENTRIES))
 
 added = new - prev
 removed = prev - new
+
+if prev and len(removed) > MAX_DELETE_RATIO * len(prev):
+    die("would delete {} of {} entries ({:.0%}), above {:.0%} ceiling - "
+        "refusing".format(len(removed), len(prev),
+                          len(removed) / len(prev), MAX_DELETE_RATIO))
+
+# --- past the gates: safe to apply ---
 
 if not added and not removed:
     print("No changes")
@@ -33,7 +62,8 @@ else:
         for k in removed:
             txn.delete(k.encode())
     env.close()
-    print(f"+{len(added)} -{len(removed)}")
+    print("+{} -{}".format(len(added), len(removed)))
 
+# Only promote NEW to PREV on a run that passed every gate. A refused run
+# exits non-zero above and never reaches here, so PREV is never poisoned.
 os.replace(NEW, PREV)
-
