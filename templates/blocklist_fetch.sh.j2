@@ -8,11 +8,6 @@ wget -4 -O "{{ dnsdist_etc_dir }}/lists/{{ j }}" "{{ i.domain }}/{{ j }}"
   {% endfor %}
 {% endfor %}
 
-rm "{{ dnsdist_etc_dir }}/lists/custom.txt"
-{% for i in blocklist_domains %}
-echo {{ i }} >> "{{ dnsdist_etc_dir }}/lists/custom.txt"
-{% endfor %}
-
 cat {{ dnsdist_etc_dir }}/lists/*.txt |sort -n |uniq > "{{ dnsdist_etc_dir }}/blocklist.txt"
 
 chmod 644 "{{ dnsdist_etc_dir }}/blocklist.txt"
