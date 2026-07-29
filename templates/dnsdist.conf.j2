@@ -100,7 +100,11 @@ getPool(""):setCache(pc)
 -- Block domains on blocklist
 addAction(AllRule(), LuaAction(function(dq)
   if isBlocked(dq.qname:toString()) then
-    return DNSAction.Nxdomain, ""
+    if dq.qtype == DNSQType.AAAA then
+      return DNSAction.Spoof, "100::1"
+    else
+      return DNSAction.Spoof, "0.0.0.0"
+    end
   end
   return DNSAction.None, ""
 end))

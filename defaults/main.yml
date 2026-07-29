@@ -5,13 +5,15 @@ dnsdist_dnstap_enabled: false
 dnsdist_dnstap_collector: "127.0.0.1:6000"
 
 dnsdist_etc_dir: "/etc/dnsdist"
+dnsdist_lmdb_name: "blocklist.lmdb"
+dnsdist_lmdb_diff_pct: 10
 
   #blocklist_urls: "{{ blocklist_urls_default | combine(blocklist_urls_custom) }}"
 blocklist_urls: "{{ blocklist_urls_default + blocklist_urls_custom }}"
 blocklist_urls_custom: []
 blocklist_urls_default:
   - name: blocklistproject
-    domain: "https://raw.githubusercontent.com/blocklistproject/Lists/refs/heads/master/alt-version"
+    domain: "https://blocklistproject.github.io/Lists/alt-version"
     files: "{{ blocklistproject_files }}"
 
 blocklistproject_files:
@@ -19,18 +21,30 @@ blocklistproject_files:
   - "ads-nl.txt"
   - "crypto-nl.txt"
   - "drugs-nl.txt"
+  #- "facebook-nl.txt"
   - "fraud-nl.txt"
   - "gambling-nl.txt"
   - "malware-nl.txt"
   - "phishing-nl.txt"
   - "piracy-nl.txt"
+  - "porn-nl.txt"
   - "ransomware-nl.txt"
   - "redirect-nl.txt"
   - "scam-nl.txt"
+  #- "tiktok-nl.txt"
+  - "torrent-nl.txt"
   - "tracking-nl.txt"
+  #- "twitter-nl.txt"
+  ### Beta Lists
+  #- "basic-nl.txt"
+  #- "smart-tv-nl.txt"
+  #- "vaping-nl.txt"
+  #- "whatsapp-nl.txt"
 
 blocklist_domains: "{{ blocklist_domains_default + blocklist_domains_custom }}"
 blocklist_domains_custom: []
 blocklist_domains_default:
   - pastebin.com
   - pastbin.com
+
+allowlist_domains: []

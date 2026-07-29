@@ -1,14 +1,12 @@
 #!/bin/bash
 
-{# set blocklist_urls = blocklist_urls_default | combine(blocklist_urls_custom, recursive=true) #}
-{# for i in blocklist_urls.files #}
 {% for i in blocklist_urls %}
   {% for j in i.files %}
 wget -4 -O "{{ dnsdist_etc_dir }}/lists/{{ j }}" "{{ i.domain }}/{{ j }}"
   {% endfor %}
 {% endfor %}
 
-cat {{ dnsdist_etc_dir }}/lists/*.txt |sort -n |uniq > "{{ dnsdist_etc_dir }}/blocklist.txt"
+grep -E -vxf {{ dnsdist_etc_dir }}/allowlist.txt <(cat {{ dnsdist_etc_dir }}/lists/*.txt |sort -n |uniq) > "{{ dnsdist_etc_dir }}/blocklist.txt"
 
 chmod 644 "{{ dnsdist_etc_dir }}/blocklist.txt"
 

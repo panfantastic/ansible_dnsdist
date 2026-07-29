@@ -6,6 +6,7 @@
     name: "{{ item }}"
     state: present
   loop:
+    - cron
     - dnsdist
     - python3-lmdb
     - liblmdb-dev
@@ -15,7 +16,7 @@
 - name: Template scripts
   template:
     src: "{{ item }}.j2"
-    dest: "/etc/dnsdist/{{ item }}"
+    dest: "{{ dnsdist_etc_dir }}/{{ item }}"
     owner: root
     group: root
     mode: "0750"
@@ -23,14 +24,13 @@
   loop:
     - "blocklist_fetch.sh"
     - "blocklist_update.sh"
-    - "mmap_create.py"
-    - "mmap_update.py"
+    - "lmdb_create.py"
   become: true
 
 - name: Upload custom blocklist
   template:
     src: "{{ lookup('first_found', dnsdist_custom_txt) }}"
-    dest: /etc/dnsdist/lists/custom.txt
+    dest: "{{ dnsdist_etc_dir }}/lists/custom.txt"
     owner: root
     group: root
     mode: "0644"
@@ -45,23 +45,28 @@
         - "{{ role_path }}/templates"
   become: true
 
-- name: Check if blocklist lmdb already exists
-  stat:
-    path: "/etc/dnsdist/blocklist.lmdb"
-  register: blocklist_lmdb
-
-- name: Run blocklist creation
-  command: "/etc/dnsdist/{{ item }}"
-  loop:
-    - "blocklist_fetch.sh"
-    - "mmap_create.py"
+- name: Upload allowlist
+  template:
+    src: "{{ lookup('first_found', dnsdist_allowlist_txt) }}"
+    dest: "{{ dnsdist_etc_dir }}/allowlist.txt"
+    owner: root
+    group: root
+    mode: "0644"
+    lstrip_blocks: yes
+  vars:
+    dnsdist_allowlist_txt:
+      files:
+        - "allowlist.txt.j2"
+      paths:
+        - "{{ playbook_dir }}/templates/{{ ansible_facts['hostname'] }}"
+        - "{{ playbook_dir }}/templates"
+        - "{{ role_path }}/templates"
   become: true
-  when: blocklist_lmdb.stat.isdir is not defined
 
 - name: Template dnsdist config, defaulting to the role's template last
   template:
     src: "{{ lookup('first_found', params) }}"
-    dest: "/etc/dnsdist/dnsdist.conf"
+    dest: "{{ dnsdist_etc_dir }}/dnsdist.conf"
     owner: root
     group: _dnsdist
     mode: "0640"
@@ -79,5 +84,22 @@
     - check dnsdist config
     - restart dnsdist
 
+- name: Check if {{ dnsdist_lmdb_name }} already exists
+  stat:
+    path: "{{ dnsdist_etc_dir }}/{{ dnsdist_lmdb_name }}"
+  register: dnsdist_lmdb_exists
 
+- name: Run blocklist creation
+  command: "{{ dnsdist_etc_dir }}/blocklist_update.sh"
+  become: true
+  when: dnsdist_lmdb_exists.stat.isdir is not defined
+
+- name: Ensure cron task for updating dnsdist exists
+  ansible.builtin.cron:
+    name: "dnsdist blocklist update"
+    job: "{{ dnsdist_etc_dir }}/blocklist_update.sh"
+    user: root
+    minute: 07
+    hour: 04
+  become: true
 

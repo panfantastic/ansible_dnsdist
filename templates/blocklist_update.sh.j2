@@ -1,4 +1,26 @@
 #!/bin/bash
 
-/etc/dnsdist/blocklist_fetch.sh
-/etc/dnsdist/mmap_update.py
+{{ dnsdist_etc_dir }}/blocklist_fetch.sh
+
+{{ dnsdist_etc_dir }}/lmdb_create.py
+
+# check if the new blocklist is a sensible size
+oldsize=$(du -s {{ dnsdist_etc_dir }}/{{ dnsdist_lmdb_name }} |awk '{print $1}')
+newsize=$(du -s {{ dnsdist_etc_dir }}/{{ dnsdist_lmdb_name }}.new |awk '{print $1}')
+
+diff=$(( oldsize > newsize ? oldsize - newsize : newsize - oldsize ))
+threshold=$(( (oldsize > newsize ? oldsize : newsize) * {{ dnsdist_lmdb_diff_pct }} / 100 ))
+
+if (( diff <= threshold )); then
+  chown -R _dnsdist:_dnsdist {{ dnsdist_etc_dir }}/{{ dnsdist_lmdb_name }}.new
+
+  mv {{ dnsdist_etc_dir }}/{{ dnsdist_lmdb_name }}{,.old}
+  mv {{ dnsdist_etc_dir }}/{{ dnsdist_lmdb_name }}{.new,}
+
+  systemctl restart dnsdist
+  rm -r {{ dnsdist_etc_dir }}/{{ dnsdist_lmdb_name }}.old
+  echo "blocklist updated"
+else
+  rm -r {{ dnsdist_etc_dir }}/{{ dnsdist_lmdb_name }}.new
+  echo "blocklist looks corrupt, not updating"
+fi
