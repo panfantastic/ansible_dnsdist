@@ -4,6 +4,7 @@
 dnsdist_dnstap_enabled: false
 dnsdist_dnstap_collector: "127.0.0.1:6000"
 
+dnsdist_pools: [default]
 dnsdist_etc_dir: "/etc/dnsdist"
 dnsdist_lmdb_name: "blocklist.lmdb"
 dnsdist_lmdb_diff_pct: 10
