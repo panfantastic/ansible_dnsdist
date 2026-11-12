@@ -26,17 +26,33 @@ setStaleCacheEntriesTTL(3600)
 
 getPool(""):setCache(pc)
 
--- Block domains on blocklist
-addAction(AllRule(), LuaAction(function(dq)
-  if isBlocked(dq.qname:toString()) then
-    if dq.qtype == DNSQType.AAAA then
-      return DNSAction.Spoof, "100::1"
-    else
-      return DNSAction.Spoof, "0.0.0.0"
-    end
+-- logging begin --
+fsutcp = newFrameStreamTcpLogger("127.0.0.1:6000")
+local function markSpoofed(dr, tap)
+  if dr:getTag('spoofed') ~= "" then
+    tap:setExtra('SPOOFED')
   end
-  return DNSAction.None, ""
-end))
+end
 
+addAction(AllRule(), DnstapLogAction("dnsdist", fsutcp))
+addResponseAction(AllRule(), DnstapLogResponseAction("dnsdist", fsutcp))
+addSelfAnsweredResponseAction(AllRule(), DnstapLogResponseAction("dnsdist", fsutcp, markSpoofed))
+-- logging end --
+
+-- blocklist begin --
+addAction(AllRule(), KeyValueStoreLookupAction(blocklist, KeyValueLookupKeySuffix(), 'blocklist-hit'))
+addAction(TagRule('blocklist-hit', ''), NoneAction())
+addAction(
+  AndRule({ TagRule('blocklist-hit', '1'), QTypeRule(DNSQType.AAAA) }),
+  LuaAction(function(dq) dq:setTag('spoofed', '1'); return DNSAction.Spoof, "100::1" end)
+)
+addAction(
+  AndRule({ TagRule('blocklist-hit', '1'), NotRule(QTypeRule(DNSQType.AAAA)) }),
+  LuaAction(function(dq) dq:setTag('spoofed', '1'); return DNSAction.Spoof, "0.0.0.0" end)
+)
+-- blocklist end --
+
+
+-- default pool
 addAction(AllRule(), PoolAction(""))
 
